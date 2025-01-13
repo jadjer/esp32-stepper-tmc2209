@@ -25,17 +25,16 @@ TMC2209::TMC2209(std::uint8_t const uartPort, SerialAddress const serialAddress,
     : hardware_serial_ptr_(new HardwareSerial(uartPort))
 
 {
-  serial_baud_rate_ = 115200;
   serial_address_ = serialAddress;
   hardware_enable_pin_ = -1;
   cool_step_enabled_ = false;
 
   if ((rxPin == 0) or (txPin == 0)) {
     // hardware_serial_ptr_->end();  // Causes issues with some versions of ESP32
-    hardware_serial_ptr_->begin(serial_baud_rate_);
+    hardware_serial_ptr_->begin(115200);
   } else {
     // hardware_serial_ptr_->end();  // Causes issues with some versions of ESP32
-    hardware_serial_ptr_->begin(serial_baud_rate_, SERIAL_8N1, rxPin, txPin);
+    hardware_serial_ptr_->begin(115200, SERIAL_8N1, rxPin, txPin);
   }
 
   initialize(serialAddress);
