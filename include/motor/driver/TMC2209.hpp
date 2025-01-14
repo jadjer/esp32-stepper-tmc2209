@@ -21,38 +21,47 @@
 
 #pragma once
 
-#include <Arduino.h>
+#include <HardwareSerial.h>
 #include <cstdint>
+#include <gpio/OutputPin.hpp>
+#include <motor/driver/interface/Driver.hpp>
 
-enum SerialAddress {
-  SERIAL_ADDRESS_0 = 0,
-  SERIAL_ADDRESS_1 = 1,
-  SERIAL_ADDRESS_2 = 2,
-  SERIAL_ADDRESS_3 = 3,
+namespace motor::driver {
+
+enum SlaveAddress {
+  SLAVE_ADDRESS_0 = 0,
+  SLAVE_ADDRESS_1 = 1,
+  SLAVE_ADDRESS_2 = 2,
+  SLAVE_ADDRESS_3 = 3,
 };
 
-enum Register {
-  ADDRESS_GCONF = 0x00,
-  ADDRESS_GSTAT = 0x01,
-  ADDRESS_IFCNT = 0x02,
-  ADDRESS_REPLYDELAY = 0x03,
-  ADDRESS_IOIN = 0x06,
-  ADDRESS_IHOLD_IRUN = 0x10,
-  ADDRESS_TPOWERDOWN = 0x11,
-  ADDRESS_TSTEP = 0x12,
-  ADDRESS_TPWMTHRS = 0x13,
-  ADDRESS_TCOOLTHRS = 0x14,
-  ADDRESS_VACTUAL = 0x22,
-  ADDRESS_SGTHRS = 0x40,
-  ADDRESS_SG_RESULT = 0x41,
-  ADDRESS_COOLCONF = 0x42,
-  ADDRESS_MSCNT = 0x6A,
-  ADDRESS_MSCURACT = 0x6B,
-  ADDRESS_CHOPCONF = 0x6C,
-  ADDRESS_DRV_STATUS = 0x6F,
-  ADDRESS_PWMCONF = 0x70,
-  ADDRESS_PWM_SCALE = 0x71,
-  ADDRESS_PWM_AUTO = 0x72
+enum RegisterAddress {
+  REGISTER_GCONF = 0x00,
+  REGISTER_GSTAT = 0x01,
+  REGISTER_IFCNT = 0x02,
+  REGISTER_REPLYDELAY = 0x03,
+  REGISTER_IOIN = 0x06,
+  REGISTER_IHOLD_IRUN = 0x10,
+  REGISTER_TPOWERDOWN = 0x11,
+  REGISTER_TSTEP = 0x12,
+  REGISTER_TPWMTHRS = 0x13,
+  REGISTER_TCOOLTHRS = 0x14,
+  REGISTER_VACTUAL = 0x22,
+  REGISTER_SGTHRS = 0x40,
+  REGISTER_SG_RESULT = 0x41,
+  REGISTER_COOLCONF = 0x42,
+  REGISTER_MSCNT = 0x6A,
+  REGISTER_MSCURACT = 0x6B,
+  REGISTER_CHOPCONF = 0x6C,
+  REGISTER_DRV_STATUS = 0x6F,
+  REGISTER_PWMCONF = 0x70,
+  REGISTER_PWM_SCALE = 0x71,
+  REGISTER_PWM_AUTO = 0x72
+};
+
+enum AccessType {
+  ACCESS_READ = 0,
+  ACCESS_WRITE = 1,
 };
 
 enum StandstillMode {
@@ -76,54 +85,16 @@ enum MeasurementCount {
   MEASUREMENT_COUNT_1 = 3,
 };
 
-struct Settings {
-  bool is_communicating;
-  bool is_setup;
-  bool software_enabled;
-  uint16_t microsteps_per_step;
-  bool inverse_motor_direction_enabled;
-  bool stealth_chop_enabled;
-  uint8_t standstill_mode;
-  uint8_t irun_percent;
-  uint8_t irun_register_value;
-  uint8_t ihold_percent;
-  uint8_t ihold_register_value;
-  uint8_t iholddelay_percent;
-  uint8_t iholddelay_register_value;
-  bool automatic_current_scaling_enabled;
-  bool automatic_gradient_adaptation_enabled;
-  uint8_t pwm_offset;
-  uint8_t pwm_gradient;
-  bool cool_step_enabled;
-  bool analog_current_scaling_enabled;
-  bool internal_sense_resistors_enabled;
-};
-
-struct Status {
-  std::uint32_t over_temperature_warning : 1;
-  std::uint32_t over_temperature_shutdown : 1;
-  std::uint32_t short_to_ground_a : 1;
-  std::uint32_t short_to_ground_b : 1;
-  std::uint32_t low_side_short_a : 1;
-  std::uint32_t low_side_short_b : 1;
-  std::uint32_t open_load_a : 1;
-  std::uint32_t open_load_b : 1;
-  std::uint32_t over_temperature_120c : 1;
-  std::uint32_t over_temperature_143c : 1;
-  std::uint32_t over_temperature_150c : 1;
-  std::uint32_t over_temperature_157c : 1;
-  std::uint32_t reserved0 : 4;
-  std::uint32_t current_scaling : 5;
-  std::uint32_t reserved1 : 9;
-  std::uint32_t stealth_chop_mode : 1;
-  std::uint32_t standstill : 1;
-};
-
-struct GlobalStatus {
-  std::uint32_t reset : 1;
-  std::uint32_t drv_err : 1;
-  std::uint32_t uv_cp : 1;
-  std::uint32_t reserved : 29;
+enum MicroStepResolution {
+  MRES_256 = 0b0000,
+  MRES_128 = 0b0001,
+  MRES_064 = 0b0010,
+  MRES_032 = 0b0011,
+  MRES_016 = 0b0100,
+  MRES_008 = 0b0101,
+  MRES_004 = 0b0110,
+  MRES_002 = 0b0111,
+  MRES_001 = 0b1000,
 };
 
 union WriteReadReplyDatagram {
@@ -131,7 +102,7 @@ union WriteReadReplyDatagram {
   {
     std::uint64_t sync : 4;
     std::uint64_t reserved : 4;
-    std::uint64_t serial_address : 8;
+    std::uint64_t slave_address : 8;
     std::uint64_t register_address : 7;
     std::uint64_t rw : 1;
     std::uint64_t data : 32;
@@ -145,12 +116,35 @@ union ReadRequestDatagram {
   {
     std::uint32_t sync : 4;
     std::uint32_t reserved : 4;
-    std::uint32_t serial_address : 8;
+    std::uint32_t slave_address : 8;
     std::uint32_t register_address : 7;
     std::uint32_t rw : 1;
     std::uint32_t crc : 8;
   };
   std::uint32_t bytes;
+};
+
+struct Settings {
+  bool is_communicating;
+  bool is_setup;
+  bool software_enabled;
+  motor::MotorSteps microsteps_per_step;
+  bool inverse_motor_direction_enabled;
+  bool stealth_chop_enabled;
+  StandstillMode standstill_mode;
+  std::uint8_t irun_percent;
+  std::uint8_t irun_register_value;
+  std::uint8_t ihold_percent;
+  std::uint8_t ihold_register_value;
+  std::uint8_t iholddelay_percent;
+  std::uint8_t iholddelay_register_value;
+  bool automatic_current_scaling_enabled;
+  bool automatic_gradient_adaptation_enabled;
+  std::uint8_t pwm_offset;
+  std::uint8_t pwm_gradient;
+  bool cool_step_enabled;
+  bool analog_current_scaling_enabled;
+  bool internal_sense_resistors_enabled;
 };
 
 union GlobalConfig {
@@ -169,6 +163,13 @@ union GlobalConfig {
     std::uint32_t reserved : 22;
   };
   std::uint32_t bytes;
+};
+
+struct GlobalStatus {
+  std::uint32_t reset : 1;
+  std::uint32_t drv_err : 1;
+  std::uint32_t uv_cp : 1;
+  std::uint32_t reserved : 29;
 };
 
 union GlobalStatusUnion {
@@ -256,6 +257,26 @@ union ChopperConfig {
   std::uint32_t bytes;
 };
 
+struct Status {
+  std::uint32_t over_temperature_warning : 1;
+  std::uint32_t over_temperature_shutdown : 1;
+  std::uint32_t short_to_ground_a : 1;
+  std::uint32_t short_to_ground_b : 1;
+  std::uint32_t low_side_short_a : 1;
+  std::uint32_t low_side_short_b : 1;
+  std::uint32_t open_load_a : 1;
+  std::uint32_t open_load_b : 1;
+  std::uint32_t over_temperature_120c : 1;
+  std::uint32_t over_temperature_143c : 1;
+  std::uint32_t over_temperature_150c : 1;
+  std::uint32_t over_temperature_157c : 1;
+  std::uint32_t reserved0 : 4;
+  std::uint32_t current_scaling : 5;
+  std::uint32_t reserved1 : 9;
+  std::uint32_t stealth_chop_mode : 1;
+  std::uint32_t standstill : 1;
+};
+
 union DriveStatus {
   struct
   {
@@ -323,8 +344,6 @@ const static std::uint8_t WRITE_READ_REPLY_DATAGRAM_SIZE = 8;
 const static std::uint8_t DATA_SIZE = 4;
 
 const static std::uint8_t SYNC = 0b101;
-const static std::uint8_t RW_READ = 0;
-const static std::uint8_t RW_WRITE = 1;
 const static std::uint8_t READ_REPLY_SERIAL_ADDRESS = 0b11111111;
 
 const static std::uint8_t READ_REQUEST_DATAGRAM_SIZE = 4;
@@ -367,15 +386,6 @@ const static std::uint8_t HSTART_DEFAULT = 5;
 const static std::uint8_t TOFF_DEFAULT = 3;
 const static std::uint8_t TOFF_DISABLE = 0;
 
-const static std::uint8_t MRES_256 = 0b0000;
-const static std::uint8_t MRES_128 = 0b0001;
-const static std::uint8_t MRES_064 = 0b0010;
-const static std::uint8_t MRES_032 = 0b0011;
-const static std::uint8_t MRES_016 = 0b0100;
-const static std::uint8_t MRES_008 = 0b0101;
-const static std::uint8_t MRES_004 = 0b0110;
-const static std::uint8_t MRES_002 = 0b0111;
-const static std::uint8_t MRES_001 = 0b1000;
 const static std::uint8_t DOUBLE_EDGE_DISABLE = 0;
 const static std::uint8_t DOUBLE_EDGE_ENABLE = 1;
 const static std::uint8_t VSENSE_DISABLE = 0;
@@ -392,82 +402,72 @@ const static std::uint8_t PWM_GRAD_MIN = 0;
 const static std::uint8_t PWM_GRAD_MAX = 255;
 const static std::uint8_t PWM_GRAD_DEFAULT = 0x14;
 
-class TMC2209 {
+const static std::uint8_t CURRENT_SCALING_MAX = 31;
+const static std::uint8_t REPLY_DELAY_MAX = 15;
+
+class TMC2209 : public motor::driver::interface::Driver {
 public:
-  explicit TMC2209(std::uint8_t uartPort, SerialAddress serialAddress, std::uint8_t rxPin = 0, std::uint8_t txPin = 0);
+  explicit TMC2209(std::uint8_t uartPort, SlaveAddress slaveAddress, std::int8_t rxPin = -1, std::int8_t txPin = -1);
+  ~TMC2209() override = default;
 
-  // driver must be enabled before use it is disabled by default
-  void setHardwareEnablePin(uint8_t hardware_enable_pin);
-  void enable();
-  void disable();
+public:
+  void setDirection(motor::Direction direction) override;
+  void setMicroSteps(motor::MotorSteps microSteps) override;
+  void setHardwareEnablePin(std::uint8_t hardwareEnablePin);
+  void setRunCurrent(std::uint8_t percent);
+  void setHoldCurrent(std::uint8_t percent);
+  void setHoldDelay(std::uint8_t percent);
+  void setAllCurrentValues(std::uint8_t run_current_percent, std::uint8_t hold_current_percent, std::uint8_t hold_delay_percent);
+  void setRMSCurrent(std::uint16_t mA, float rSense, float holdMultiplier = 0.5f);
+  void setStandstillMode(StandstillMode mode);
+  void setPwmOffset(std::uint8_t pwm_amplitude);
+  void setPwmGradient(std::uint8_t pwm_amplitude);
+  void setPowerDownDelay(std::uint8_t power_down_delay);
+  void setReplyDelay(std::uint8_t delay);
 
-  // valid values = 1,2,4,8,...128,256, other values get rounded down
-  void setMicrostepsPerStep(uint16_t microsteps_per_step);
+public:
+  void enable() override;
+  void disable() override;
 
-  // valid values = 0-8, microsteps = 2^exponent, 0=1,1=2,2=4,...8=256
-  // https://en.wikipedia.org/wiki/Power_of_two
-  void setMicrostepsPerStepPowerOfTwo(uint8_t exponent);
-
-  // range 0-100
-  void setRunCurrent(uint8_t percent);
-  // range 0-100
-  void setHoldCurrent(uint8_t percent);
-  // range 0-100
-  void setHoldDelay(uint8_t percent);
-  // range 0-100
-  void setAllCurrentValues(uint8_t run_current_percent, uint8_t hold_current_percent, uint8_t hold_delay_percent);
-  void setRMSCurrent(uint16_t mA,
-                     float rSense,
-                     float holdMultiplier = 0.5f);
-
+public:
   void enableDoubleEdge();
   void disableDoubleEdge();
 
+public:
   void enableVSense();
   void disableVSense();
 
+public:
   void enableInverseMotorDirection();
   void disableInverseMotorDirection();
 
-  void setStandstillMode(StandstillMode mode);
-
+public:
   void enableAutomaticCurrentScaling();
   void disableAutomaticCurrentScaling();
+
+public:
   void enableAutomaticGradientAdaptation();
   void disableAutomaticGradientAdaptation();
-  // range 0-255
-  void setPwmOffset(uint8_t pwm_amplitude);
-  // range 0-255
-  void setPwmGradient(uint8_t pwm_amplitude);
 
-  // default = 20
-  // mimimum of 2 for StealthChop auto tuning
-  void setPowerDownDelay(uint8_t power_down_delay);
-
-  // mimimum of 2 when using multiple serial addresses
-  // in bidirectional communication
-  const static uint8_t REPLY_DELAY_MAX = 15;
-  void setReplyDelay(uint8_t delay);
-
-  void moveAtVelocity(int32_t microsteps_per_period);
-  void moveUsingStepDirInterface();
-
+public:
   void enableStealthChop();
   void disableStealthChop();
 
-  void setStealthChopDurationThreshold(uint32_t duration_threshold);
-
-  void setStallGuardThreshold(uint8_t stall_guard_threshold);
-
-  // lower_threshold: min = 1, max = 15
-  // upper_threshold: min = 0, max = 15, 0-2 recommended
-  void enableCoolStep(uint8_t lower_threshold = 1, uint8_t upper_threshold = 0);
+public:
+  void enableCoolStep(std::uint8_t lower_threshold = 1, std::uint8_t upper_threshold = 0);
   void disableCoolStep();
+
+public:
+  void moveAtVelocity(std::int32_t microsteps_per_period);
+  void moveUsingStepDirInterface();
+
+  void setStealthChopDurationThreshold(std::uint32_t duration_threshold);
+  void setStallGuardThreshold(std::uint8_t stall_guard_threshold);
 
   void setCoolStepCurrentIncrement(CurrentIncrement current_increment);
 
   void setCoolStepMeasurementCount(MeasurementCount measurement_count);
-  void setCoolStepDurationThreshold(uint32_t duration_threshold);
+  void setCoolStepDurationThreshold(std::uint32_t duration_threshold);
 
   void enableAnalogCurrentScaling();
   void disableAnalogCurrentScaling();
@@ -475,55 +475,54 @@ public:
   void useExternalSenseResistors();
   void useInternalSenseResistors();
 
-  // bidirectional methods
-  uint8_t getVersion();
+public:
+  void stepUp() override;
+  void stepDown() override;
 
-  // if driver is not communicating, check power and communication connections
-  bool isCommunicating();
-
-  // check to make sure TMC2209 is properly setup and communicating
-  bool isSetupAndCommunicating();
-
-  // driver may be communicating but not setup if driver power is lost then
-  // restored after setup so that defaults are loaded instead of setup options
-  bool isCommunicatingButNotSetup();
-
-  // driver may also be disabled by the hardware enable input pin
-  // this pin must be grounded or disconnected before driver may be enabled
-  bool hardwareDisabled();
-
-  uint16_t getMicrostepsPerStep();
+public:
+  [[nodiscard]] std::uint8_t getVersion();
+  [[nodiscard]] motor::Direction getDirection() const override;
+  [[nodiscard]] motor::MotorSteps getMicroSteps() const override;
 
   Settings getSettings();
 
-  const static uint8_t CURRENT_SCALING_MAX = 31;
   Status getStatus();
 
   GlobalStatus getGlobalStatus();
+  std::uint8_t getInterfaceTransmissionCounter();
+
+  std::uint32_t getInterstepDuration();
+
+  std::uint16_t getStallGuardResult();
+
+  uint8_t getPwmScaleSum();
+  std::int16_t getPwmScaleAuto();
+  std::uint8_t getPwmOffsetAuto();
+  std::uint8_t getPwmGradientAuto();
+
+  std::uint16_t getMicrostepCounter();
+
+public:
+  [[nodiscard]] bool isFault() const override;
+  [[nodiscard]] bool inHomed() const override;
+  [[nodiscard]] bool isEnabled() const override;
+  bool isCommunicating();
+  // bidirectional methods
+
+  bool isSetupAndCommunicating();
+
+  bool isCommunicatingButNotSetup();
+
+  bool hardwareDisabled();
+
   void clearReset();
   void clearDriveError();
 
-  uint8_t getInterfaceTransmissionCounter();
-
-  uint32_t getInterstepDuration();
-
-  uint16_t getStallGuardResult();
-
-  uint8_t getPwmScaleSum();
-  int16_t getPwmScaleAuto();
-  uint8_t getPwmOffsetAuto();
-  uint8_t getPwmGradientAuto();
-
-  uint16_t getMicrostepCounter();
+private:
+  void initialize();
 
 private:
-  void initialize(SerialAddress serial_address = SERIAL_ADDRESS_0);
-  int serialAvailable();
-  size_t serialWrite(uint8_t c);
-  int serialRead();
-  void serialFlush();
-
-  void setOperationModeToSerial(SerialAddress serial_address);
+  void setOperationModeToSerial();
 
   void setRegistersToDefaults();
   void readAndStoreRegisters();
@@ -532,41 +531,57 @@ private:
 
   void minimizeMotorCurrent();
 
-  uint32_t reverseData(uint32_t data);
-  template<typename Datagram>
-  uint8_t calculateCrc(Datagram &datagram, uint8_t datagram_size);
-  template<typename Datagram>
-  void sendDatagramUnidirectional(Datagram &datagram, uint8_t datagram_size);
-  template<typename Datagram>
-  void sendDatagramBidirectional(Datagram &datagram, uint8_t datagram_size);
-
-  void write(uint8_t register_address, uint32_t data);
-  uint32_t read(uint8_t register_address);
-
-  uint8_t percentToCurrentSetting(uint8_t percent);
-  uint8_t currentSettingToPercent(uint8_t current_setting);
-  uint8_t percentToHoldDelaySetting(uint8_t percent);
-  uint8_t holdDelaySettingToPercent(uint8_t hold_delay_setting);
+  static std::uint8_t percentToCurrentSetting(std::uint8_t percent);
+  static std::uint8_t currentSettingToPercent(std::uint8_t current_setting);
+  static std::uint8_t percentToHoldDelaySetting(std::uint8_t percent);
+  static std::uint8_t holdDelaySettingToPercent(std::uint8_t hold_delay_setting);
 
   void writeStoredGlobalConfig();
-  uint32_t readGlobalConfigBytes();
+  std::uint32_t readGlobalConfigBytes();
   void writeStoredDriverCurrent();
   void writeStoredChopperConfig();
-  uint32_t readChopperConfigBytes();
+  std::uint32_t readChopperConfigBytes();
   void writeStoredPwmConfig();
-  uint32_t readPwmConfigBytes();
-
-  uint32_t constrain_(uint32_t value, uint32_t low, uint32_t high);
+  std::uint32_t readPwmConfigBytes();
 
 private:
-  HardwareSerial *hardware_serial_ptr_;
-  uint8_t serial_address_;
-  int16_t hardware_enable_pin_;
-  GlobalConfig global_config_;
-  DriverCurrent driver_current_;
-  CoolConfig cool_config_;
-  bool cool_step_enabled_;
-  ChopperConfig chopper_config_;
-  uint8_t toff_ = TOFF_DEFAULT;
-  PwmConfig pwm_config_;
+  template<typename Datagram>
+  void sendDatagramBidirectional(Datagram const &datagram, std::size_t datagramSize);
+  template<typename Datagram>
+  void sendDatagramUnidirectional(Datagram const &datagram, std::size_t datagramSize);
+
+private:
+  void write(RegisterAddress registerAddress, std::uint32_t data);
+  std::uint32_t read(RegisterAddress registerAddress);
+
+private:
+  static std::uint32_t reverseBits(std::uint32_t value);
+  template<typename Datagram>
+  static std::uint8_t calculateCrc(Datagram &datagram, std::size_t datagramSize);
+  static std::uint32_t getConstrainedValue(std::uint32_t value, std::uint32_t min, std::uint32_t max);
+  static std::uint32_t map(std::uint32_t value, std::uint32_t start1, std::uint32_t stop1, std::uint32_t start2, std::uint32_t stop2);
+
+private:
+  SlaveAddress const m_slaveAddress;
+
+private:
+  gpio::OutputPin const m_stepPin;
+  gpio::OutputPin const m_directionPin;
+
+private:
+  OutputPinPtr m_enablePin;
+
+private:
+  bool m_coolStepEnabled;
+  std::uint8_t m_toff;
+  HardwareSerial m_serial;
+
+private:
+  PwmConfig m_pwmConfig;
+  CoolConfig m_coolConfig;
+  GlobalConfig m_globalConfig;
+  DriverCurrent m_driverCurrent;
+  ChopperConfig m_chopperConfig;
 };
+
+}
