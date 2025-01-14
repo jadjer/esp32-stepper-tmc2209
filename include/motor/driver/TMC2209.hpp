@@ -39,29 +39,73 @@ enum RegisterAddress {
   REGISTER_GCONF = 0x00,
   REGISTER_GSTAT = 0x01,
   REGISTER_IFCNT = 0x02,
-  REGISTER_REPLYDELAY = 0x03,
+  REGISTER_NODECONF = 0x03,
+  REGISTER_OTP_PROG = 0x04,
+  REGISTER_OTP_READ = 0x05,
   REGISTER_IOIN = 0x06,
+  REGISTER_FACTORY_CONF = 0x07,
   REGISTER_IHOLD_IRUN = 0x10,
   REGISTER_TPOWERDOWN = 0x11,
-  REGISTER_TSTEP = 0x12,
-  REGISTER_TPWMTHRS = 0x13,
-  REGISTER_TCOOLTHRS = 0x14,
-  REGISTER_VACTUAL = 0x22,
-  REGISTER_SGTHRS = 0x40,
-  REGISTER_SG_RESULT = 0x41,
-  REGISTER_COOLCONF = 0x42,
-  REGISTER_MSCNT = 0x6A,
-  REGISTER_MSCURACT = 0x6B,
-  REGISTER_CHOPCONF = 0x6C,
-  REGISTER_DRV_STATUS = 0x6F,
-  REGISTER_PWMCONF = 0x70,
-  REGISTER_PWM_SCALE = 0x71,
-  REGISTER_PWM_AUTO = 0x72
+  REGISTER_TSTEP = 0x12,     ///< Actual measured time between two 1/256 microsteps derived from the step input frequency in units of 1/fCLK.
+  REGISTER_TPWMTHRS = 0x13,  ///< Sets the upper velocity for StealthChop voltage PWM mode. TSTEP ≥ TPWMTHRS
+  REGISTER_TCOOLTHRS = 0x14, ///< This is the lower threshold velocity for switching on smart energy CoolStep and StallGuard to DIAG output.
+  REGISTER_VACTUAL = 0x22,   ///< VACTUAL allows moving the motor by UART control.
+  REGISTER_SGTHRS = 0x40,    ///< Detection threshold for stall. (StallGuard threshold result)
+  REGISTER_SG_RESULT = 0x41, ///< StallGuard result.
+  REGISTER_COOLCONF = 0x42,  ///< CoolStep configuration.
+  REGISTER_MSCNT = 0x6A,     ///< Microstep counter.
+  REGISTER_MSCURACT = 0x6B,  ///< Actual microstep current for motor.
+  REGISTER_CHOPCONF = 0x6C,  ///< Chopper and driver configuration.
+  REGISTER_DRV_STATUS = 0x6F,///< Driver status flags and current level read back.
+  REGISTER_PWMCONF = 0x70,   ///< StealthChop PWM chopper configuration.
+  REGISTER_PWM_SCALE = 0x71, ///< Results of StealthChop amplitude regulator.
+  REGISTER_PWM_AUTO = 0x72,  ///< These automatically generated values can be read out in order to determine a default power up setting for PWM_GRAD and PWM_OFS.
 };
 
 enum AccessType {
   ACCESS_READ = 0,
   ACCESS_WRITE = 1,
+};
+
+union WriteDatagram {
+  struct
+  {
+    std::uint64_t sync : 4;
+    std::uint64_t reserved : 4;
+    std::uint64_t slave_address : 8;
+    std::uint64_t register_address : 7;
+    std::uint64_t rw : 1;
+    std::uint64_t data : 32;
+    std::uint64_t crc : 8;
+  };
+  std::uint64_t bytes;
+};
+
+union ReadDatagram {
+  struct
+  {
+    std::uint64_t sync : 4;
+    std::uint64_t reserved : 4;
+    std::uint64_t slave_address : 8;
+    std::uint64_t register_address : 7;
+    std::uint64_t rw : 1;
+    std::uint64_t crc : 8;
+  };
+  std::uint32_t bytes;
+};
+
+union ReadReplyDatagram {
+  struct
+  {
+    std::uint64_t sync : 4;
+    std::uint64_t reserved : 4;
+    std::uint64_t master_address : 8;
+    std::uint64_t register_address : 7;
+    std::uint64_t rw : 1;
+    std::uint64_t data : 32;
+    std::uint64_t crc : 8;
+  };
+  std::uint64_t bytes;
 };
 
 enum StandstillMode {
@@ -95,33 +139,6 @@ enum MicroStepResolution {
   MRES_004 = 0b0110,
   MRES_002 = 0b0111,
   MRES_001 = 0b1000,
-};
-
-union WriteReadReplyDatagram {
-  struct
-  {
-    std::uint64_t sync : 4;
-    std::uint64_t reserved : 4;
-    std::uint64_t slave_address : 8;
-    std::uint64_t register_address : 7;
-    std::uint64_t rw : 1;
-    std::uint64_t data : 32;
-    std::uint64_t crc : 8;
-  };
-  std::uint64_t bytes;
-};
-
-union ReadRequestDatagram {
-  struct
-  {
-    std::uint32_t sync : 4;
-    std::uint32_t reserved : 4;
-    std::uint32_t slave_address : 8;
-    std::uint32_t register_address : 7;
-    std::uint32_t rw : 1;
-    std::uint32_t crc : 8;
-  };
-  std::uint32_t bytes;
 };
 
 struct Settings {
@@ -180,11 +197,11 @@ union GlobalStatusUnion {
   std::uint32_t bytes;
 };
 
-union ReplyDelay {
+union SendDelay {
   struct
   {
     std::uint32_t reserved_0 : 8;
-    std::uint32_t replydelay : 4;
+    std::uint32_t send_delay : 4;
     std::uint32_t reserved_1 : 20;
   };
   std::uint32_t bytes;
@@ -323,88 +340,6 @@ union PwmAuto {
   std::uint32_t bytes;
 };
 
-// Serial Settings
-const static std::uint8_t BYTE_MAX_VALUE = 0xFF;
-const static std::uint8_t BITS_PER_BYTE = 8;
-
-const static std::uint32_t ECHO_DELAY_INC_MICROSECONDS = 1;
-const static std::uint32_t ECHO_DELAY_MAX_MICROSECONDS = 4000;
-
-const static std::uint32_t REPLY_DELAY_INC_MICROSECONDS = 1;
-const static std::uint32_t REPLY_DELAY_MAX_MICROSECONDS = 10000;
-
-const static std::uint8_t STEPPER_DRIVER_FEATURE_OFF = 0;
-const static std::uint8_t STEPPER_DRIVER_FEATURE_ON = 1;
-
-const static std::uint8_t MAX_READ_RETRIES = 5;
-const static std::uint32_t READ_RETRY_DELAY_MS = 20;
-
-// Datagrams
-const static std::uint8_t WRITE_READ_REPLY_DATAGRAM_SIZE = 8;
-const static std::uint8_t DATA_SIZE = 4;
-
-const static std::uint8_t SYNC = 0b101;
-const static std::uint8_t READ_REPLY_SERIAL_ADDRESS = 0b11111111;
-
-const static std::uint8_t READ_REQUEST_DATAGRAM_SIZE = 4;
-
-const static std::uint8_t VERSION = 0x21;
-
-const static std::uint8_t PERCENT_MIN = 0;
-const static std::uint8_t PERCENT_MAX = 100;
-const static std::uint8_t CURRENT_SETTING_MIN = 0;
-const static std::uint8_t CURRENT_SETTING_MAX = 31;
-const static std::uint8_t HOLD_DELAY_MIN = 0;
-const static std::uint8_t HOLD_DELAY_MAX = 15;
-const static std::uint8_t IHOLD_DEFAULT = 16;
-const static std::uint8_t IRUN_DEFAULT = 31;
-const static std::uint8_t IHOLDDELAY_DEFAULT = 1;
-const static std::uint8_t TPOWERDOWN_DEFAULT = 20;
-const static std::uint32_t TPWMTHRS_DEFAULT = 0;
-
-const static std::int32_t VACTUAL_DEFAULT = 0;
-const static std::int32_t VACTUAL_STEP_DIR_INTERFACE = 0;
-
-const static std::uint8_t TCOOLTHRS_DEFAULT = 0;
-const static std::uint8_t SGTHRS_DEFAULT = 0;
-
-const static std::uint8_t COOLCONF_DEFAULT = 0;
-
-const static std::uint8_t SEIMIN_UPPER_CURRENT_LIMIT = 20;
-const static std::uint8_t SEIMIN_LOWER_SETTING = 0;
-const static std::uint8_t SEIMIN_UPPER_SETTING = 1;
-const static std::uint8_t SEMIN_OFF = 0;
-const static std::uint8_t SEMIN_MIN = 1;
-const static std::uint8_t SEMIN_MAX = 15;
-const static std::uint8_t SEMAX_MIN = 0;
-const static std::uint8_t SEMAX_MAX = 15;
-
-const static std::uint32_t CHOPPER_CONFIG_DEFAULT = 0x10000053;
-const static std::uint8_t TBL_DEFAULT = 0b10;
-const static std::uint8_t HEND_DEFAULT = 0;
-const static std::uint8_t HSTART_DEFAULT = 5;
-const static std::uint8_t TOFF_DEFAULT = 3;
-const static std::uint8_t TOFF_DISABLE = 0;
-
-const static std::uint8_t DOUBLE_EDGE_DISABLE = 0;
-const static std::uint8_t DOUBLE_EDGE_ENABLE = 1;
-const static std::uint8_t VSENSE_DISABLE = 0;
-const static std::uint8_t VSENSE_ENABLE = 1;
-
-const static std::size_t MICROSTEPS_PER_STEP_MIN = 1;
-const static std::size_t MICROSTEPS_PER_STEP_MAX = 256;
-
-const static std::uint32_t PWM_CONFIG_DEFAULT = 0xC10D0024;
-const static std::uint8_t PWM_OFFSET_MIN = 0;
-const static std::uint8_t PWM_OFFSET_MAX = 255;
-const static std::uint8_t PWM_OFFSET_DEFAULT = 0x24;
-const static std::uint8_t PWM_GRAD_MIN = 0;
-const static std::uint8_t PWM_GRAD_MAX = 255;
-const static std::uint8_t PWM_GRAD_DEFAULT = 0x14;
-
-const static std::uint8_t CURRENT_SCALING_MAX = 31;
-const static std::uint8_t REPLY_DELAY_MAX = 15;
-
 class TMC2209 : public motor::driver::interface::Driver {
 public:
   explicit TMC2209(std::uint8_t uartPort, SlaveAddress slaveAddress, std::int8_t rxPin = -1, std::int8_t txPin = -1);
@@ -423,7 +358,7 @@ public:
   void setPwmOffset(std::uint8_t pwm_amplitude);
   void setPwmGradient(std::uint8_t pwm_amplitude);
   void setPowerDownDelay(std::uint8_t power_down_delay);
-  void setReplyDelay(std::uint8_t delay);
+  void setSendDelay(std::uint8_t delay);
 
 public:
   void enable() override;
@@ -584,4 +519,4 @@ private:
   ChopperConfig m_chopperConfig;
 };
 
-}
+}// namespace motor::driver

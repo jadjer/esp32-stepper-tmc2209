@@ -23,6 +23,89 @@
 
 namespace motor::driver {
 
+std::uint32_t const PWM_CONFIG_DEFAULT = 0xC10D0024;
+std::uint32_t const CHOPPER_CONFIG_DEFAULT = 0x10000053;
+
+// Serial Settings
+std::uint8_t const BYTE_MAX_VALUE = 0xFF;
+std::uint8_t const BITS_PER_BYTE = 8;
+
+std::uint32_t const ECHO_DELAY_INC_MICROSECONDS = 1;
+std::uint32_t const ECHO_DELAY_MAX_MICROSECONDS = 4000;
+
+std::uint32_t const REPLY_DELAY_INC_MICROSECONDS = 1;
+std::uint32_t const REPLY_DELAY_MAX_MICROSECONDS = 10000;
+
+std::uint8_t const STEPPER_DRIVER_FEATURE_OFF = 0;
+std::uint8_t const STEPPER_DRIVER_FEATURE_ON = 1;
+
+std::uint8_t const MAX_READ_RETRIES = 5;
+std::uint32_t const READ_RETRY_DELAY_MS = 20;
+
+// Datagrams
+std::uint8_t const WRITE_READ_REPLY_DATAGRAM_SIZE = 8;
+std::uint8_t const DATA_SIZE = 4;
+
+std::uint8_t const SYNC = 0b101;
+std::uint8_t const READ_REPLY_SERIAL_ADDRESS = 0b11111111;
+
+std::uint8_t const READ_REQUEST_DATAGRAM_SIZE = 4;
+
+std::uint8_t const VERSION = 0x21;
+
+std::uint8_t const PERCENT_MIN = 0;
+std::uint8_t const PERCENT_MAX = 100;
+std::uint8_t const CURRENT_SETTING_MIN = 0;
+std::uint8_t const CURRENT_SETTING_MAX = 31;
+std::uint8_t const HOLD_DELAY_MIN = 0;
+std::uint8_t const HOLD_DELAY_MAX = 15;
+std::uint8_t const IHOLD_DEFAULT = 16;
+std::uint8_t const IRUN_DEFAULT = 31;
+std::uint8_t const IHOLDDELAY_DEFAULT = 1;
+std::uint8_t const TPOWERDOWN_DEFAULT = 20;
+std::uint32_t const TPWMTHRS_DEFAULT = 0;
+
+std::int32_t const VACTUAL_DEFAULT = 0;
+std::int32_t const VACTUAL_STEP_DIR_INTERFACE = 0;
+
+std::uint8_t const TCOOLTHRS_DEFAULT = 0;
+std::uint8_t const SGTHRS_DEFAULT = 0;
+
+std::uint8_t const COOLCONF_DEFAULT = 0;
+
+std::uint8_t const SEIMIN_UPPER_CURRENT_LIMIT = 20;
+std::uint8_t const SEIMIN_LOWER_SETTING = 0;
+std::uint8_t const SEIMIN_UPPER_SETTING = 1;
+std::uint8_t const SEMIN_OFF = 0;
+std::uint8_t const SEMIN_MIN = 1;
+std::uint8_t const SEMIN_MAX = 15;
+std::uint8_t const SEMAX_MIN = 0;
+std::uint8_t const SEMAX_MAX = 15;
+
+std::uint8_t const TBL_DEFAULT = 0;
+std::uint8_t const HEND_DEFAULT = 0;
+std::uint8_t const HSTART_DEFAULT = 5;
+std::uint8_t const TOFF_DEFAULT = 3;
+std::uint8_t const TOFF_DISABLE = 0;
+
+std::uint8_t const DOUBLE_EDGE_DISABLE = 0;
+std::uint8_t const DOUBLE_EDGE_ENABLE = 1;
+std::uint8_t const VSENSE_DISABLE = 0;
+std::uint8_t const VSENSE_ENABLE = 1;
+
+std::size_t const MICROSTEPS_PER_STEP_MIN = 1;
+std::size_t const MICROSTEPS_PER_STEP_MAX = 256;
+
+std::uint8_t const PWM_OFFSET_MIN = 0;
+std::uint8_t const PWM_OFFSET_MAX = 255;
+std::uint8_t const PWM_OFFSET_DEFAULT = 0x24;
+std::uint8_t const PWM_GRAD_MIN = 0;
+std::uint8_t const PWM_GRAD_MAX = 255;
+std::uint8_t const PWM_GRAD_DEFAULT = 0x14;
+
+std::uint8_t const CURRENT_SCALING_MAX = 31;
+std::uint8_t const REPLY_DELAY_MAX = 15;
+
 TMC2209::TMC2209(std::uint8_t const uartPort, SlaveAddress const slaveAddress, std::int8_t const rxPin, std::int8_t const txPin)
     : m_slaveAddress(slaveAddress),
 
@@ -114,16 +197,15 @@ void TMC2209::disable() {
   writeStoredChopperConfig();
 }
 
-void TMC2209::setRunCurrent(std::uint8_t percent) {
-  std::uint8_t run_current = percentToCurrentSetting(percent);
-  m_driverCurrent.irun = run_current;
+void TMC2209::setRunCurrent(std::uint8_t const percent) {
+  std::uint8_t const runCurrent = percentToCurrentSetting(percent);
+  m_driverCurrent.irun = runCurrent;
   writeStoredDriverCurrent();
 }
 
-void TMC2209::setHoldCurrent(std::uint8_t percent) {
-  std::uint8_t hold_current = percentToCurrentSetting(percent);
-
-  m_driverCurrent.ihold = hold_current;
+void TMC2209::setHoldCurrent(std::uint8_t const percent) {
+  std::uint8_t const holdCurrent = percentToCurrentSetting(percent);
+  m_driverCurrent.ihold = holdCurrent;
   writeStoredDriverCurrent();
 }
 
@@ -237,15 +319,15 @@ void TMC2209::setPowerDownDelay(std::uint8_t power_down_delay) {
   write(REGISTER_TPOWERDOWN, power_down_delay);
 }
 
-void TMC2209::setReplyDelay(std::uint8_t reply_delay) {
-  if (reply_delay > REPLY_DELAY_MAX) {
-    reply_delay = REPLY_DELAY_MAX;
+void TMC2209::setSendDelay(std::uint8_t delay) {
+  if (delay > REPLY_DELAY_MAX) {
+    delay = REPLY_DELAY_MAX;
   }
 
-  ReplyDelay replyDelayData{};
-  replyDelayData.bytes = 0;
-  replyDelayData.replydelay = reply_delay;
-  write(REGISTER_REPLYDELAY, replyDelayData.bytes);
+  SendDelay sendDelayData{};
+  sendDelayData.bytes = 0;
+  sendDelayData.send_delay = delay;
+  write(REGISTER_NODECONF, sendDelayData.bytes);
 }
 
 void TMC2209::moveAtVelocity(int32_t microsteps_per_period) {
@@ -524,30 +606,16 @@ void TMC2209::setOperationModeToSerial() {
 }
 
 void TMC2209::setRegistersToDefaults() {
-  m_driverCurrent.bytes = 0;
-  m_driverCurrent.ihold = IHOLD_DEFAULT;
-  m_driverCurrent.irun = IRUN_DEFAULT;
-  m_driverCurrent.iholddelay = IHOLDDELAY_DEFAULT;
-  write(REGISTER_IHOLD_IRUN, m_driverCurrent.bytes);
+  ESP_LOGI("TMC2209", "Set default values");
+  ESP_LOGI("TMC2209", "Write count before: %d", getInterfaceTransmissionCounter());
 
   m_chopperConfig.bytes = CHOPPER_CONFIG_DEFAULT;
-  m_chopperConfig.tbl = TBL_DEFAULT;
-  m_chopperConfig.hend = HEND_DEFAULT;
-  m_chopperConfig.hstart = HSTART_DEFAULT;
-  m_chopperConfig.toff = TOFF_DEFAULT;
   write(REGISTER_CHOPCONF, m_chopperConfig.bytes);
 
   m_pwmConfig.bytes = PWM_CONFIG_DEFAULT;
   write(REGISTER_PWMCONF, m_pwmConfig.bytes);
 
-  m_coolConfig.bytes = COOLCONF_DEFAULT;
-  write(REGISTER_COOLCONF, m_coolConfig.bytes);
-
-  write(REGISTER_TPOWERDOWN, TPOWERDOWN_DEFAULT);
-  write(REGISTER_TPWMTHRS, TPWMTHRS_DEFAULT);
-  write(REGISTER_VACTUAL, VACTUAL_DEFAULT);
-  write(REGISTER_TCOOLTHRS, TCOOLTHRS_DEFAULT);
-  write(REGISTER_SGTHRS, SGTHRS_DEFAULT);
+  ESP_LOGI("TMC2209", "Write count after: %d", getInterfaceTransmissionCounter());
 }
 
 void TMC2209::readAndStoreRegisters() {
@@ -570,9 +638,9 @@ void TMC2209::minimizeMotorCurrent() {
 }
 
 std::uint8_t TMC2209::percentToCurrentSetting(std::uint8_t percent) {
-  std::uint8_t constrained_percent = getConstrainedValue(percent, PERCENT_MIN, PERCENT_MAX);
-  std::uint8_t current_setting = map(constrained_percent, PERCENT_MIN, PERCENT_MAX, CURRENT_SETTING_MIN, CURRENT_SETTING_MAX);
-  return current_setting;
+  std::uint8_t const constrainedPercent = getConstrainedValue(percent, PERCENT_MIN, PERCENT_MAX);
+  std::uint8_t const currentSetting = map(constrainedPercent, PERCENT_MIN, PERCENT_MAX, CURRENT_SETTING_MIN, CURRENT_SETTING_MAX);
+  return currentSetting;
 }
 
 std::uint8_t TMC2209::currentSettingToPercent(std::uint8_t current_setting) {
@@ -677,7 +745,7 @@ void TMC2209::sendDatagramUnidirectional(Datagram const &datagram, std::size_t c
 }
 
 void TMC2209::write(RegisterAddress const registerAddress, std::uint32_t const data) {
-  WriteReadReplyDatagram writeDatagram{};
+  WriteDatagram writeDatagram{};
   writeDatagram.bytes = 0;
   writeDatagram.sync = SYNC;
   writeDatagram.slave_address = m_slaveAddress;
@@ -690,16 +758,16 @@ void TMC2209::write(RegisterAddress const registerAddress, std::uint32_t const d
 }
 
 std::uint32_t TMC2209::read(RegisterAddress registerAddress) {
-  ReadRequestDatagram readRequestDatagram{};
-  readRequestDatagram.bytes = 0;
-  readRequestDatagram.sync = SYNC;
-  readRequestDatagram.slave_address = m_slaveAddress;
-  readRequestDatagram.register_address = registerAddress;
-  readRequestDatagram.rw = ACCESS_READ;
-  readRequestDatagram.crc = calculateCrc(readRequestDatagram, READ_REQUEST_DATAGRAM_SIZE);
+  ReadDatagram readDatagram{};
+  readDatagram.bytes = 0;
+  readDatagram.sync = SYNC;
+  readDatagram.slave_address = m_slaveAddress;
+  readDatagram.register_address = registerAddress;
+  readDatagram.rw = ACCESS_READ;
+  readDatagram.crc = calculateCrc(readDatagram, READ_REQUEST_DATAGRAM_SIZE);
 
   for (std::size_t retry = 0; retry < MAX_READ_RETRIES; retry++) {
-    sendDatagramBidirectional(readRequestDatagram, READ_REQUEST_DATAGRAM_SIZE);
+    sendDatagramBidirectional(readDatagram, READ_REQUEST_DATAGRAM_SIZE);
 
     std::uint32_t replyDelay = 0;
     while ((m_serial.available() < WRITE_READ_REPLY_DATAGRAM_SIZE) and (replyDelay < REPLY_DELAY_MAX_MICROSECONDS)) {
@@ -714,7 +782,7 @@ std::uint32_t TMC2209::read(RegisterAddress registerAddress) {
     std::uint64_t byte;
     std::uint8_t byteCount = 0;
 
-    WriteReadReplyDatagram readReplyDatagram{};
+    ReadReplyDatagram readReplyDatagram{};
     readReplyDatagram.bytes = 0;
 
     for (std::uint8_t i = 0; i < WRITE_READ_REPLY_DATAGRAM_SIZE; ++i) {
@@ -776,20 +844,31 @@ std::uint32_t TMC2209::getConstrainedValue(std::uint32_t const value, std::uint3
 std::uint32_t TMC2209::map(std::uint32_t value, std::uint32_t start1, std::uint32_t stop1, std::uint32_t start2, std::uint32_t stop2) {
   return start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1));
 }
+
 void TMC2209::stepUp() {
+  m_stepPin.setLevel(gpio::PIN_LEVEL_HIGH);
 }
+
 void TMC2209::stepDown() {
+  m_stepPin.setLevel(gpio::PIN_LEVEL_LOW);
 }
+
 motor::Direction TMC2209::getDirection() const {
+  if (m_directionPin.getLevel() == gpio::PIN_LEVEL_LOW) {
+    return motor::MOTOR_ROTATE_CW;
+  }
+
   return motor::MOTOR_ROTATE_CCW;
 }
 
 bool TMC2209::isFault() const {
   return false;
 }
+
 bool TMC2209::inHomed() const {
   return false;
 }
+
 bool TMC2209::isEnabled() const {
   return false;
 }
