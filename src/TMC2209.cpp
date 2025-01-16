@@ -586,21 +586,25 @@ std::uint16_t TMC2209::getMicrostepCounter() {
 // private
 void TMC2209::initialize() {
   setOperationModeToSerial();
-  setRegistersToDefaults();
+  readAndStoreRegisters();
+  //  setRegistersToDefaults();
   clearDriveError();
-
   minimizeMotorCurrent();
   disable();
-  disableAutomaticCurrentScaling();
-  disableAutomaticGradientAdaptation();
+//  disableAutomaticCurrentScaling();
+//  disableAutomaticGradientAdaptation();
 }
 
 void TMC2209::setOperationModeToSerial() {
-  m_globalConfig.bytes = 0;
+  m_globalConfig.bytes = readGlobalConfigBytes();
+
   m_globalConfig.i_scale_analog = 0;
+  m_globalConfig.internal_rsense = 0;
+  m_globalConfig.enable_spread_cycle = 1;
+  m_globalConfig.shaft = 1;
   m_globalConfig.pdn_disable = 1;
   m_globalConfig.mstep_reg_select = 1;
-  m_globalConfig.multistep_filt = 1;
+  m_globalConfig.multistep_filt = 0;
 
   writeStoredGlobalConfig();
 }

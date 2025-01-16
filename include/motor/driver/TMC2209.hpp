@@ -130,15 +130,25 @@ enum MeasurementCount {
 };
 
 enum MicroStepResolution {
-  MRES_256 = 0b0000,
-  MRES_128 = 0b0001,
-  MRES_064 = 0b0010,
-  MRES_032 = 0b0011,
-  MRES_016 = 0b0100,
-  MRES_008 = 0b0101,
-  MRES_004 = 0b0110,
-  MRES_002 = 0b0111,
-  MRES_001 = 0b1000,
+    MRES_256 = 0b0000,
+    MRES_128 = 0b0001,
+    MRES_064 = 0b0010,
+    MRES_032 = 0b0011,
+    MRES_016 = 0b0100,
+    MRES_008 = 0b0101,
+    MRES_004 = 0b0110,
+    MRES_002 = 0b0111,
+    MRES_001 = 0b1000,
+
+//  MRES_001 = 0b0000,
+//  MRES_002 = 0b0001,
+//  MRES_004 = 0b0010,
+//  MRES_008 = 0b0011,
+//  MRES_016 = 0b0100,
+//  MRES_032 = 0b0101,
+//  MRES_064 = 0b0110,
+//  MRES_128 = 0b0111,
+//  MRES_256 = 0b1000,
 };
 
 struct Settings {
